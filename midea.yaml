@@ -2,8 +2,8 @@
 # Definition: definitions/boards/generic-esp8266/manifest.yaml
 
 esphome:
-  name: aire-bodner
-  friendly_name: Aire Acondicionado Bodner
+  name: midea
+  friendly_name: Aire Acondicionado
 
 esp8266:
   board: esp12e
@@ -12,6 +12,7 @@ esp8266:
 
 logger:
   level: INFO
+  baud_rate: 0
 
 api:
   encryption:
@@ -22,45 +23,41 @@ ota:
     encryption:
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
   power_save_mode: LIGHT
   fast_connect: true
- 
   ap:
-    ssid: "aire-bodner Fallback Hotspot"
-    password: "YOUR_FALLBACK_AP_PASSWORD"
-    
+    ssid: "aire-acondicion Fallback Hotspot"
+    password: "PASSWORD HERE"
+
 captive_portal:
 
 uart:
-  - baud_rate: 9600
-    rx_pin: GPIO14
-    tx_pin: GPIO12
+  baud_rate: 9600
+  tx_pin: GPIO12
+  rx_pin: GPIO14
 
-# REMOTE TRANSMITTER
 remote_transmitter:
-  - pin: GPIO13
-    carrier_duty_percent: 100%
+  pin: GPIO13
+  carrier_duty_percent: 100%
 
-# BODNER / MIDEA AIR CONDITIONER
 climate:
   - platform: midea
-    name: "Aire Acondicionado Bodner"
+    name: "Aire Acondicionado"
     id: midea_ac
     autoconf: true
     icon: "mdi:air-conditioner"
-    
-# AVERAGE TEMPERATURE SENSOR (Home Assistant Helper)
-# Imports the mean temperature calculated from two physical thermostats in Home Assistant
+
 sensor:
   - platform: homeassistant
     id: temperatura_media_salon
     entity_id: sensor.temperatura_media_salon
     internal: true
     filters:
-      - debounce: 2s # Prevents bootloops during startup
-      - delta: 0.5   # Only sends Follow Me update if temp changes by at least 0.5°C
+      - throttle: 5min      # Máximo un update cada 5 minutos
+      - delta: 1.0          # Solo si cambia ≥1°C respecto al anterior enviado
     on_value:
       then:
         - midea_ac.follow_me:
@@ -68,4 +65,17 @@ sensor:
             use_fahrenheit: false
             beeper: false
 
-    name: Living Room Average Temperature
+time:
+  - platform: sntp
+    on_time:
+      - seconds: 0
+        minutes: 0
+        then:
+          - if:
+              condition:
+                lambda: "return id(temperatura_media_salon).has_state();"
+              then:
+                - midea_ac.follow_me:
+                    temperature: !lambda "return id(temperatura_media_salon).state;"
+                    use_fahrenheit: false
+                    beeper: false
